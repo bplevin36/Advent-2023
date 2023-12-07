@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use nom::{
     IResult,
     bytes::complete::tag,
@@ -96,13 +98,15 @@ impl Game {
 }
 
 pub fn main() {
+    let start_time = Instant::now();
     let input = read_input("02");
+    let start_compute_time = Instant::now();
     let mut sum = 0;
     for line in input.lines() {
         let (_, game) = Game::from_line(line).unwrap();
         sum += game.min_set().power();
     }
-
+    println!("Total time: {:?}, compute time: {:?}", start_time.elapsed(), start_compute_time.elapsed());
     println!("{}", sum);
 
 }
