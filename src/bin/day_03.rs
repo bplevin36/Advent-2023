@@ -77,29 +77,24 @@ pub fn main() {
                 (true, true) => {
                     let adj = find_adjacent_symbol(&lines, line_idx, col_idx);
                     if adj.is_some() {
-                        println!("Found adjacent symbol: {:?}", adj.unwrap());
                         found_adjacent_symbol = adj;
                     }
                 },
                 (true, false) => {
                     let adj = find_adjacent_symbol(&lines, line_idx, col_idx);
                     if adj.is_some() {
-                        println!("Found adjacent symbol: {:?}", adj.unwrap());
                         found_adjacent_symbol = adj;
                     }
                     if found_adjacent_symbol.is_some() {
                         match line[num_start..col_idx].parse::<u32>() {
                             Ok(num_parsed) => {
                                 num_sum += num_parsed;
-                                println!("Added num {}", num_parsed);
                             },
                             Err(e) => {
                                 println!("Failed to parse line {} col {}-{}; '{}': {}", line_idx, num_start, col_idx, &line[num_start..col_idx], e);
                                 panic!("panic");
                             }
                         }
-                    } else {
-                        println!("Not adding {}", &line[num_start..col_idx])
                     }
                     in_num = false;
                     found_adjacent_symbol = None;
@@ -108,10 +103,8 @@ pub fn main() {
                 (false, true) => {
                     in_num = true;
                     num_start = col_idx;
-                    println!("Starting in_num iteration: {}", c.escape_ascii().to_string());
                     let adj = find_adjacent_symbol(&lines, line_idx, col_idx);
                     if adj.is_some() {
-                        println!("Found adjacent symbol: {:?}", adj.unwrap());
                         found_adjacent_symbol = adj;
                     }
                 },
@@ -122,22 +115,18 @@ pub fn main() {
             let col_idx = line.len();
             let adj = find_adjacent_symbol(&lines, line_idx, col_idx);
             if adj.is_some() {
-                println!("Found adjacent symbol: {:?}", adj.unwrap());
                 found_adjacent_symbol = adj;
             }
             if found_adjacent_symbol.is_some() {
                 match line[num_start..col_idx].parse::<u32>() {
                     Ok(num_parsed) => {
                         num_sum += num_parsed;
-                        println!("Added num {}", num_parsed);
                     },
                     Err(e) => {
                         println!("Failed to parse line {} col {}-{}; '{}': {}", line_idx, num_start, col_idx, &line[num_start..col_idx], e);
                         panic!("panic");
                     }
                 }
-            } else {
-                println!("Not adding {}", &line[num_start..col_idx])
             }
         }
     }
