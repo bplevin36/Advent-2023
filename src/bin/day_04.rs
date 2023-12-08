@@ -1,11 +1,11 @@
-use std::{collections::{HashSet, HashMap}, time::Instant};
+use std::{collections::HashSet, time::Instant};
 
-use aoc2023::read_input;
 use nom::{
     IResult,
-    character::complete::{u32 as parse_u32, multispace1, multispace0}, sequence::tuple, bytes::complete::tag, multi::{separated_list1, many1},
+    character::complete::{u32 as parse_u32, multispace1, multispace0}, sequence::tuple, bytes::complete::tag, multi::separated_list1,
 };
 
+use aoc2023::read_input;
 
 struct Card {
     id: u32,
