@@ -7,6 +7,7 @@ use std::{cmp::Ordering, time::Instant};
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Enum)]
 #[repr(u8)]
 enum Card {
+    J,
     TWO,
     THREE,
     FOUR,
@@ -16,7 +17,6 @@ enum Card {
     EIGHT,
     NINE,
     TEN,
-    J,
     Q,
     K,
     A,
@@ -81,16 +81,59 @@ impl HandType {
         for &card in cards.iter() {
             card_counts[card].1 += 1;
         }
+        let (_, j_count) = card_counts[Card::J];
         let counts_list = card_counts.as_mut_slice();
         counts_list.sort_by_key(|(_, v)| *v);
-        match counts_list {
-            [.., (_, 5)] => HandType::FiveKind,
-            [.., (_, 4)] => HandType::FourKind,
-            [.., (_, 2), (_, 3)] => HandType::FullHouse,
-            [.., (_, 3)] => HandType::ThreeKind,
-            [.., (_, 2), (_, 2)] => HandType::TwoPair,
-            [.., (_, 2)] => HandType::OnePair,
+        /*
+        match (counts_list) {
+            ([.., (not_j, max)]) if not_j != &Card::J && *max + j_count == 5 =>
+            ([.., (_, 4)], 0) | (_, 3) => HandType::FourKind,
+            ([.., (not_j, 3)], 1) if not_j != &Card::J => HandType::FourKind,
+            ([.., (_, 2), (_, 3)], 0) => HandType::FullHouse,
+            ([.., (not_j1, 1), (not_j2, 3)], 1) if not_j1 != &Card::J && not_j2 != &Card::J => HandType::FullHouse,
+            ([.., (not_j1, 2), (not_j2, 2)], 1) if not_j1 != &Card::J && not_j2 != &Card::J => HandType::FullHouse,
+            ([.., (_, 3)], _) => HandType::ThreeKind,
+            ([.., (not_j, 2)], _) => HandType::ThreeKind,
+            ([.., (_, 2), (_, 2)], _) => HandType::TwoPair,
+            ([.., (_, 2)], _) => HandType::OnePair,
             _ => HandType::HighCard,
+        }
+        */
+        let &[.., (_, count2), (_, count1)] = card_counts.as_array();
+        match j_count {
+            0 => match (count1, count2) {
+                (5, _) => HandType::FiveKind,
+                (4, _) => HandType::FourKind,
+                (3, 2) => HandType::FullHouse,
+                (3, _) => HandType::ThreeKind,
+                (2, 2) => HandType::TwoPair,
+                (2, 1) => HandType::OnePair,
+                _ => HandType::HighCard,
+            },
+            1 => {
+                match (count1, count2) {
+                    (4, _) => HandType::FiveKind,
+                    (3, _) => HandType::FourKind,
+                    (2, 2) => HandType::FullHouse,
+                    (2, 1) => HandType::ThreeKind,
+                    _ => HandType::OnePair,
+                }
+            },
+            2 => {
+                match (count1, count2) {
+                    (3, _) => HandType::FiveKind,
+                    (2, 2) => HandType::FourKind,
+                    _ => HandType::ThreeKind,
+                }
+            },
+            3 => {
+                match (count1, count2) {
+                    (3, 2) => HandType::FiveKind,
+                    _ => HandType::FourKind,
+                }
+            }
+            4 | 5 => HandType::FiveKind,
+            _ => panic!("Unexpected number of J"),
         }
     }
 }
