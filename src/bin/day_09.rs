@@ -9,7 +9,7 @@ fn parse_sequences(input: &str) -> IResult<&str, Vec<Vec<i32>>> {
         separated_list1(tag(" "), parse_i32))(input)
 }
 
-fn extrapolate_next(sequence: Vec<i32>) -> i32 {
+fn extrapolate_prev(sequence: Vec<i32>) -> i32 {
     let mut diffs_vec = Vec::new();
     let mut diffs: Vec<i32> = sequence.windows(2).map(|s| s[1] - s[0]).collect();
     diffs_vec.push(sequence);
@@ -18,13 +18,13 @@ fn extrapolate_next(sequence: Vec<i32>) -> i32 {
         diffs_vec.push(diffs);
         diffs = next_diffs;
     }
-    let mut last_delta = 0;
+    let mut prev_delta = 0;
     for diffs in diffs_vec.iter_mut().rev() {
-        let next_delta = diffs.last().unwrap() + last_delta;
-        diffs.push(next_delta);
-        last_delta = next_delta;
+        let next_delta = diffs.first().unwrap() - prev_delta;
+        diffs.insert(0, next_delta);
+        prev_delta = next_delta;
     }
-    *diffs_vec[0].last().unwrap()
+    *diffs_vec[0].first().unwrap()
 }
 
 pub fn main() {
@@ -34,7 +34,7 @@ pub fn main() {
 
     let mut sum = 0;
     for sequence in sequences {
-        sum += extrapolate_next(sequence);
+        sum += extrapolate_prev(sequence);
     }
 
     println!("Total time: {:?}", start_time.elapsed());
