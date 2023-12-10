@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{time::Instant, fmt::Display};
 
 use aoc2023::read_input;
 
@@ -29,16 +29,6 @@ impl Direction {
         }
     }
 
-    fn from_coord_delta(delta: (i8, i8)) -> Direction {
-        match delta {
-            (-1, 0) => Direction::North,
-            (1, 0) => Direction::South,
-            (0, 1) => Direction::East,
-            (0, -1) => Direction::West,
-            _ => panic!("Invalid coordinate delta"),
-        }
-    }
-
     fn iter() -> impl Iterator<Item = Direction> {
         [Direction::North, Direction::East, Direction::South, Direction::West].iter().copied()
     }
@@ -54,6 +44,22 @@ enum Pipe {
     NW,
     SE,
     SW,
+}
+
+impl Display for Pipe {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let byte = match self {
+            Pipe::None => b'.',
+            Pipe::Start => b'S',
+            Pipe::Vert => b'|',
+            Pipe::Horiz => b'-',
+            Pipe::NE => b'L',
+            Pipe::NW => b'J',
+            Pipe::SE => b'F',
+            Pipe::SW => b'7',
+        };
+        write!(f, "{}", byte as char)
+    }
 }
 
 impl Pipe {
@@ -115,6 +121,13 @@ pub fn main() {
         }
     }
 
+    // allocate a vec for the grid with all pipes not part of the loop removed
+    let mut cleaned_lines: Vec<Vec<Pipe>> = Vec::with_capacity(lines.len());
+    for line in lines.iter() {
+        cleaned_lines.push(vec![Pipe::None; line.len()]);
+    }
+    cleaned_lines[start.0][start.1] = Pipe::NE;  // known from examining input
+
     let mut current_coord = start;
     let mut current_pipe = Pipe::Start;
     let mut came_from = Direction::South;
@@ -135,6 +148,7 @@ pub fn main() {
                     current_coord = (adj_line_idx, adj_col_idx);
                     current_pipe = adj_pipe;
                     came_from = direction.invert();
+                    cleaned_lines[current_coord.0][current_coord.1] = current_pipe;
                     break;
                 }
             },
@@ -144,7 +158,6 @@ pub fn main() {
         panic!("Failed to find next tile")
     }
 
-    let mut loop_steps = 1;
     loop {
         let direction = current_pipe.next_entered_from(came_from);
         let (line_delta, col_delta) = direction.to_coord_delta();
@@ -159,11 +172,49 @@ pub fn main() {
         current_pipe = adj_pipe;
         came_from = direction.invert();
 
-        loop_steps += 1;
         if current_coord == start {
             break;
         }
+        cleaned_lines[current_coord.0][current_coord.1] = current_pipe;
     }
+
+    // count points in cleaned grid that are inside loop
+    let mut tiles_inside = 0;
+    for line in cleaned_lines.iter_mut() {
+        let mut times_crossed = 0;
+        let mut from_south = false;
+        let mut from_north = false;
+        for pipe in line.iter_mut().rev() {
+            match pipe {
+                Pipe::None => {
+                    if times_crossed % 2 == 1 {
+                        tiles_inside += 1;
+                    }
+                },
+                Pipe::Vert => {
+                    times_crossed += 1;
+                },
+                Pipe::NW | Pipe::NE => {
+                    if from_south {
+                        times_crossed += 1;
+                        from_south = false;
+                    } else {
+                        from_north = !from_north;
+                    }
+                },
+                Pipe::SW | Pipe::SE => {
+                    if from_north {
+                        times_crossed += 1;
+                        from_north = false;
+                    } else {
+                        from_south = !from_south;
+                    }
+                },
+                _ => (),
+            }
+        }
+    }
+
     println!("Total time: {:?}", start_time.elapsed());
-    println!("{}", loop_steps / 2);
+    println!("{}", tiles_inside);
 }
