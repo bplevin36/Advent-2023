@@ -6,10 +6,41 @@ pub fn main() {
     let start_time = Instant::now();
     let input = read_input("15");
 
-    let mut sum = 0u32;
+    // run initialization of boxes
+    let mut boxes: Vec<Vec<(&str, u8)>> = vec![vec![]; 256];
     for mut step in input.split(',') {
         step = step.trim_end_matches('\n');
-        sum += run_hash(step) as u32;
+
+        if let Some((label, focal_length_str)) = step.split_once("=") {
+            let focal_length = focal_length_str.parse::<u8>().unwrap();
+            let box_idx = run_hash(label);
+            let box_to_use = &mut boxes[box_idx as usize];
+            match box_to_use.iter().position(|(existing_label, _)| *existing_label == label) {
+                Some(idx) => {
+                    box_to_use.get_mut(idx).unwrap().1 = focal_length;
+                },
+                None => {
+                    box_to_use.push((label, focal_length));
+                },
+            }
+        } else {
+            let label = step.strip_suffix("-").unwrap();
+            let box_idx = run_hash(label);
+            let box_to_use = &mut boxes[box_idx as usize];
+            match box_to_use.iter().position(|(existing_label, _)| *existing_label == label) {
+                None => (),
+                Some(idx) => {
+                    box_to_use.remove(idx);
+                },
+            }
+        }
+    }
+    // compute power
+    let mut sum = 0u32;
+    for (lens_box, box_num) in boxes.iter().zip(1..) {
+        for (&(_, focal_length), lens_num) in lens_box.iter().zip(1..) {
+            sum += box_num * lens_num * focal_length as u32;
+        }
     }
 
     println!("{}", sum);
