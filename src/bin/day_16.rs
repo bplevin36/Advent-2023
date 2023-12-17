@@ -46,11 +46,32 @@ pub fn main() {
     let mut energized: HashSet<(usize, usize)> = HashSet::new();
     let mut directions_passed: HashSet<(usize, usize, Direction)> = HashSet::new();
 
-    project_beam(&lines, &mut energized, &mut directions_passed, (0, 0), Direction::East);
+    let mut max_energized = 0;
+    for i in 0..lines[0].len() {
+        energized.clear();
+        directions_passed.clear();
+        project_beam(&lines, &mut energized, &mut directions_passed, (0, i), Direction::South);
+        max_energized = max_energized.max(energized.iter().count());
 
-    let num_energized = energized.iter().count();
+        energized.clear();
+        directions_passed.clear();
+        project_beam(&lines, &mut energized, &mut directions_passed, (lines.len() - 1, i), Direction::North);
+        max_energized = max_energized.max(energized.iter().count());
+    }
 
-    println!("{}", num_energized);
+    for i in 0..lines.len() {
+        energized.clear();
+        directions_passed.clear();
+        project_beam(&lines, &mut energized, &mut directions_passed, (i, 0), Direction::East);
+        max_energized = max_energized.max(energized.iter().count());
+
+        energized.clear();
+        directions_passed.clear();
+        project_beam(&lines, &mut energized, &mut directions_passed, (i, lines[i].len() - 1), Direction::West);
+        max_energized = max_energized.max(energized.iter().count());
+    }
+
+    println!("{}", max_energized);
     println!("Total time: {:?}", start_time.elapsed());
 }
 
