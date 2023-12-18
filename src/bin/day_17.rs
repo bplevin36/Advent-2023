@@ -1,10 +1,11 @@
-use std::{collections::{HashMap, HashSet}, cmp::{Ordering, Reverse}, time::Instant};
+use std::{collections::HashMap, cmp::{Reverse}, time::Instant};
 
 use aoc2023::read_input;
 use priority_queue::PriorityQueue;
 
 
-const MAX_RUN: u8 = 3;
+const MAX_RUN: u8 = 10;
+const MIN_RUN: u8 = 4;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 enum Direction {
@@ -63,23 +64,26 @@ pub fn main() {
     let end_coords = (lines.len() as isize - 1, lines[lines.len() - 1].len() as isize - 1);
     // run Djikstra's
     let mut queue: PriorityQueue<(isize, isize, Direction, u8), Reverse<usize>> = PriorityQueue::new();
-    let mut current_node = (0, 0, Direction::East, 0);
-    distance_to.insert(current_node, 0);
-    queue.push(current_node, Reverse(0));
+    let start = (0, 0, Direction::East, 0);
+    distance_to.insert(start, 0);
+    queue.push(start, Reverse(0));
     loop {
         let (closest, Reverse(closest_dist)) = match queue.pop() {
             None => break,
             Some(x) => x,
         };
-        current_node = closest;
-        let old_distance = distance_to[&current_node];
+        let old_distance = distance_to[&closest];
         if closest_dist > old_distance {
             continue;
         }
 
         for (neighbor, weight) in Direction::iter()
             .filter_map(|d| {
-                if d == current_node.2.invert() {
+                if d == closest.2.invert() {
+                    return None;
+                }
+                // if we haven't met the min run length, we cannot turn yet
+                if closest.3 < MIN_RUN && d != closest.2 {
                     return None;
                 }
                 let delta = d.to_coord_delta();
@@ -105,7 +109,7 @@ pub fn main() {
     // find the duplicate of the destination that has the shortest distance
     let mut shortest = usize::MAX;
     for direction in Direction::iter() {
-        for run_length in 1..=MAX_RUN {
+        for run_length in MIN_RUN..=MAX_RUN {
             let dist = distance_to[&(end_coords.0, end_coords.1, direction, run_length)];
             shortest = shortest.min(dist);
         }
