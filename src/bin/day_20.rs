@@ -79,9 +79,7 @@ fn parse_modules(input: &str) -> HashMap<&str, Module> {
     module_map
 }
 
-fn run_button_push(modules: &mut HashMap<&str, Module>) -> (usize, usize) {
-    let mut high_sent = 0;
-    let mut low_sent = 0;
+fn run_button_push(modules: &mut HashMap<&str, Module>, watched_modules: &mut HashMap<&str, usize>, iteration: usize) {
     let mut pending: VecDeque<(&str, &str, bool)> = VecDeque::from([("", "broadcaster", false)]);
 
     loop {
@@ -89,10 +87,13 @@ fn run_button_push(modules: &mut HashMap<&str, Module>) -> (usize, usize) {
             Some(t) => t,
             None => break,
         };
-        if pulse {
-            high_sent += 1;
-        } else {
-            low_sent += 1;
+        if !pulse {
+            if let Some(n) = watched_modules.get_mut(dest) {
+                *n = iteration;
+                if watched_modules.values().all(|&v| v != 0) {
+                    return;
+                }
+            }
         }
         let module = match modules.get_mut(dest) {
             Some(m) => m,
@@ -101,7 +102,7 @@ fn run_button_push(modules: &mut HashMap<&str, Module>) -> (usize, usize) {
         let next_pending = module.process_pulse(pulse, sender);
         pending.extend(next_pending);
     }
-    (high_sent, low_sent)
+
 }
 
 pub fn main() {
@@ -109,10 +110,58 @@ pub fn main() {
     let input = read_input("20");
 
     let mut modules = parse_modules(&input);
+    let mut watched_modules: HashMap<&str, usize> = HashMap::new();
+    /* HACK: examination of the graph shows these node IDs determine the output
+       and receive messages from loops */
+    watched_modules.insert("tr", 0);
+    watched_modules.insert("dr", 0);
+    watched_modules.insert("xm", 0);
+    watched_modules.insert("nh", 0);
 
-    let (num_high, num_low) = (0..1000).map(|_| {
-        run_button_push(&mut modules)
-    }).reduce(|(h1, l1), (h2, l2)| (h1 + h2, l1 + l2)).unwrap();
-    println!("{}", num_high * num_low);
-    println!("Total time: {:#?}", start_time.elapsed());
+    for num_pushes in 1..100_000 {
+        run_button_push(&mut modules, &mut watched_modules, num_pushes);
+        if watched_modules.values().all(|&v| v != 0) {
+            let iteration = watched_modules.values().copied().reduce(lcm).unwrap();
+            println!("{}", iteration);
+            println!("Total time: {:#?}", start_time.elapsed());
+            return;
+        }
+    }
+}
+
+// adapted from Wikipedia's description of Stein's Algorithm
+pub fn gcd(mut u: usize, mut v: usize) -> usize {
+    if u == 0 {
+        return v;
+    }
+    if v == 0 {
+        return u;
+    }
+
+    // `|` is bitwise OR. `trailing_zeros` quickly counts a binary number's
+    // trailing zeros, giving its prime factorization's exponent on two.
+    let gcd_exponent_on_two = (u | v).trailing_zeros();
+
+    // `>>=` divides the left by two to the power of the right, storing that in
+    // the left variable. `u` divided by its prime factorization's power of two
+    // turns it odd.
+    u >>= u.trailing_zeros();
+    v >>= v.trailing_zeros();
+
+    while u != v {
+        if u < v {
+            // Swap the variables' values with each other.
+            core::mem::swap(&mut u, &mut v);
+        }
+        u -= v;
+        u >>= u.trailing_zeros();
+    }
+
+    // `<<` multiplies the left by two to the power of the right.
+    u << gcd_exponent_on_two
+}
+
+fn lcm(val1: usize, val2: usize) -> usize {
+    let multiple = val1 * val2;
+    multiple / gcd(val1, val2) as usize
 }
