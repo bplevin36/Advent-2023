@@ -1,4 +1,4 @@
-use std::{time::Instant, collections::HashSet, mem};
+use std::{time::Instant, collections::{HashSet, HashMap}, mem};
 
 use aoc2023::read_input;
 use nom::{IResult, sequence::{separated_pair, tuple}, character::complete::u32 as pu32, bytes::complete::tag, multi::separated_list1};
@@ -93,20 +93,21 @@ impl Pile {
         mem::swap(&mut self.bricks, &mut processed);
     }
 
-    fn get_resting_on(&self, brick_idx: usize) -> Vec<Brick> {
+    fn list_this_is_resting_on(&self, brick_idx: usize) -> HashSet<Brick> {
         let brick = self.bricks[brick_idx];
         let bottom_z = brick.bottom_z();
         let footprint = brick.footprint();
 
-        let mut resting_on = Vec::new();
+        let mut resting_on = HashSet::new();
         for other_brick in self.bricks[..brick_idx].iter().rev() {
             if other_brick.top_z() == bottom_z - 1 && other_brick.footprint_intersects(footprint) {
-                resting_on.push(*other_brick);
+                resting_on.insert(*other_brick);
             }
         }
         resting_on
     }
 }
+
 fn main () {
     let start_time = Instant::now();
     let input = read_input("22");
@@ -114,13 +115,29 @@ fn main () {
     let mut pile = Pile::parse(&input);
     pile.settle_down();
 
-    let mut bricks_can_be_removed: HashSet<Brick> = pile.bricks.iter().copied().collect();
-    for brick_idx in 0..pile.bricks.len() {
-        let resting_on = pile.get_resting_on(brick_idx);
-        if resting_on.len() == 1 {
-            bricks_can_be_removed.remove(&resting_on[0]);
-        }
+    let mut brick_to_resting_on: HashMap<Brick, HashSet<Brick>> = HashMap::new();
+
+    for brick_idx in (0..pile.bricks.len()).rev() {
+        let brick = pile.bricks[brick_idx];
+        let this_is_resting_on = pile.list_this_is_resting_on(brick_idx);
+        brick_to_resting_on.insert(brick, this_is_resting_on);
     }
-    println!("{:?}", bricks_can_be_removed.len());
+
+    let mut sum = 0;
+    for brick_idx in 0..pile.bricks.len() {
+        let brick = pile.bricks[brick_idx];
+        let mut destroyed = HashSet::new();
+        destroyed.insert(brick);
+        for other_brick_idx in brick_idx + 1..pile.bricks.len() {
+            let other_brick = pile.bricks[other_brick_idx];
+            let other_brick_resting_on = &brick_to_resting_on[&other_brick];
+            if other_brick_resting_on.len() > 0 && other_brick_resting_on.is_subset(&destroyed) {
+                destroyed.insert(other_brick);
+            }
+        }
+        destroyed.remove(&brick);  // we don't count the brick we chose to destroy to start the chain reaction
+        sum += destroyed.len();
+    }
+    println!("{:?}", sum);
     println!("Total time: {:?}", start_time.elapsed());
 }
