@@ -1,4 +1,4 @@
-use std::{collections::HashSet, time::Instant};
+use std::{collections::{HashSet, HashMap}, time::Instant};
 
 use aoc2023::read_input;
 
@@ -19,7 +19,14 @@ impl Direction {
             Direction::West => (0, -1),
         }
     }
-
+    fn invert(self) -> Direction {
+        match self {
+            Direction::North => Direction::South,
+            Direction::South => Direction::North,
+            Direction::East => Direction::West,
+            Direction::West => Direction::East,
+        }
+    }
     fn possible() -> &'static [Direction] {
         &[Direction::North, Direction::East, Direction::South, Direction::West]
     }
@@ -32,25 +39,128 @@ enum Tile {
     Slope(Direction),
 }
 
-#[derive(Clone)]
-struct Path {
-    tiles: Vec<(usize, usize)>,
-    tile_set: HashSet<(usize, usize)>,
-}
-
-impl Path {
-    fn from_tiles(tiles: Vec<(usize, usize)>) -> Path {
-        Path {
-            tile_set: tiles.iter().copied().collect(),
-            tiles: tiles,
+fn follow_to_intersection(
+    grid: &Vec<Vec<Tile>>, start: (usize, usize), mut direction: Direction
+    // (intersection coord, vec of next coords, steps taken)
+) -> ((usize, usize), Vec<((usize, usize), Direction)>, usize) {
+    let mut coord = start;
+    let mut steps = 1;
+    loop {
+        let next_coords: Vec<((usize, usize), Direction)> = Direction::possible().iter().filter_map(|&next_direction| {
+            if next_direction == direction.invert() {
+                return None;
+            }
+            let (row_delta, col_delta) = next_direction.to_coord_delta();
+            let next_coord = match (
+                    coord.0.checked_add_signed(row_delta as isize),
+                    coord.1.checked_add_signed(col_delta as isize)) {
+                (Some(row), Some(col)) => (row, col),
+                _ => return None,
+            };
+            if next_coord.0 >= grid.len() || next_coord.1 >= grid[0].len() {
+                return None;
+            }
+            if let Tile::Block = grid[next_coord.0][next_coord.1] {
+                return None;
+            }
+            Some((next_coord, next_direction))
+        }).collect();
+        if next_coords.len() > 1 || next_coords.len() == 0 {
+            return (coord, next_coords, steps);
+        } else {
+            coord = next_coords[0].0;
+            direction = next_coords[0].1;
+            steps += 1;
         }
     }
-    fn add_coord(&mut self, coord: (usize, usize)) {
-        self.tiles.push(coord);
-        self.tile_set.insert(coord);
+}
+
+#[derive(Debug)]
+struct Node {
+    _coord: (usize, usize),
+    // (coord, distance)
+    edges: Vec<((usize, usize), usize)>,
+}
+
+impl Node {
+    fn from_coord(coord: (usize, usize)) -> Node {
+        Node {
+            _coord: coord,
+            edges: vec![],
+        }
     }
 }
 
+#[derive(Debug)]
+struct Graph {
+    nodes: HashMap<(usize, usize), Node>,
+}
+
+impl Graph {
+    fn from_grid(grid: &Vec<Vec<Tile>>) -> Graph {
+        let start = (0, 1);
+        let dest = (grid.len() - 1, grid.last().unwrap().len() - 2);
+
+        let mut intersections: Vec<((usize, usize), Vec<((usize, usize), Direction)>)> = vec![];
+        intersections.push((start, vec![((start.0 + 1, start.1), Direction::South)]));
+        intersections.push((dest, vec![((dest.0 - 1, dest.1), Direction::North)]));
+        for row_idx in 1..(grid.len() - 1) {
+            let row = &grid[row_idx];
+            for col_idx in 1..(row.len() - 1) {
+                let tile = row[col_idx];
+                if let Tile::Block = tile {
+                    continue;
+                }
+                // non-block neighbors
+                let neighbors: Vec<((usize, usize), Direction)> = Direction::possible().into_iter().filter_map(|d| {
+                    let (row_delta, col_delta) = d.to_coord_delta();
+                    let neighbor_row = row_idx.wrapping_add_signed(row_delta as isize);
+                    let neighbor_col = col_idx.wrapping_add_signed(col_delta as isize);
+                    if let Tile::Block = grid[neighbor_row][neighbor_col] {
+                        return None;
+                    }
+                    Some(((neighbor_row, neighbor_col), *d))
+                }).collect();
+                if neighbors.len() > 2 {
+                    intersections.push(((row_idx, col_idx), neighbors));
+                }
+            }
+        }
+        let mut nodes: HashMap<(usize, usize), Node> = HashMap::new();
+        for (intersection, branches) in intersections {
+            let mut node = Node::from_coord(intersection);
+
+            for (branch_start, direction) in branches {
+                let (next_intersection, _next_coords, steps) = follow_to_intersection(&grid, branch_start, direction);
+                node.edges.push((next_intersection, steps));
+            }
+            nodes.insert(intersection, node);
+        }
+        Graph {
+            nodes,
+        }
+    }
+}
+
+fn find_max_path(graph: &Graph, start: (usize, usize), dest: (usize, usize), mut discovered: HashSet<(usize, usize)>) -> Option<usize> {
+    if start == dest {
+        return Some(0);
+    }
+    discovered.insert(start);
+    let node = &graph.nodes[&start];
+    let mut max_path: Option<usize> = None;
+    for (other_coord, distance) in node.edges.iter() {
+        if !discovered.contains(other_coord) {
+            match find_max_path(graph, *other_coord, dest, discovered.clone()) {
+                None => (),
+                Some(path_length) => {
+                    max_path = Some(max_path.unwrap_or_default().max(distance + path_length));
+                }
+            }
+        }
+    }
+    max_path
+}
 
 fn main() {
     let start_time = Instant::now();
@@ -69,59 +179,14 @@ fn main() {
             }).collect()
         }).collect();
 
+
     let start = (0, 1);
     let dest = (grid.len() - 1, grid.last().unwrap().len() - 2);
+    // build graph from grid
+    let graph = Graph::from_grid(&grid);
 
-    let mut paths: Vec<Path> = vec![Path::from_tiles(vec![(start)])];
-    let mut all_found = false;
-    while !all_found {
-        all_found = true;
-        let mut path_idx = 0;
-        while path_idx < paths.len() {
-            if !paths[path_idx].tile_set.contains(&dest) {
-                all_found = false;
-                let tip_coord = paths[path_idx].tiles.last().copied().unwrap();
-                let tip_tile = grid[tip_coord.0][tip_coord.1];
-                let mut possible_directions: Vec<Direction> = Vec::new();
-                if let Tile::Slope(direction) = tip_tile {
-                    possible_directions.push(direction);
-                } else {
-                    possible_directions = Direction::possible().to_owned();
-                }
-                let next_coords: Vec<(usize, usize)> = possible_directions.into_iter().filter_map(|direction| {
-                    let (row_delta, col_delta) = direction.to_coord_delta();
-                    let next_coord = match (
-                            tip_coord.0.checked_add_signed(row_delta as isize),
-                            tip_coord.1.checked_add_signed(col_delta as isize)) {
-                        (Some(row), Some(col)) => (row, col),
-                        _ => return None,
-                    };
-                    if paths[path_idx].tile_set.contains(&next_coord) {
-                        return None;
-                    }
-                    if let Tile::Block = grid[next_coord.0][next_coord.1] {
-                        return None;
-                    }
-                    Some(next_coord)
-                }).collect();
-                if next_coords.len() == 0 {
-                    // dead end
-                    paths.remove(path_idx);
-                    continue;
-                }
-                if next_coords.len() > 1 {
-                    for next_coord in &next_coords[1..] {
-                        let mut other_path = paths[path_idx].clone();
-                        other_path.add_coord(*next_coord);
-                        paths.push(other_path);
-                    }
-                }
-                paths[path_idx].add_coord(next_coords[0]);
-            }
-            path_idx += 1;
-        }
-    }
-    let max_len = paths.iter().max_by_key(|p| p.tiles.len()).unwrap().tiles.len() - 1;
+    let discovered = HashSet::new();
+    let max_len = find_max_path(&graph, start, dest, discovered).unwrap();
     println!("{}", max_len);
     println!("Total time: {:?}", start_time.elapsed());
 }
