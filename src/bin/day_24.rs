@@ -1,12 +1,9 @@
 use std::time::Instant;
 
 use aoc2023::read_input;
-use float_eq::assert_float_eq;
 use nom::{IResult, character::complete::{u64 as pu64, i64 as pi64}, sequence::tuple, bytes::complete::tag, multi::separated_list1};
-use ndarray::prelude::*;
-use ndarray_linalg::Solve;
-
-#[derive(Debug)]
+use z3::{SatResult, Solver, Context, Config, ast::Int};
+#[derive(Debug, Clone, Copy)]
 struct Ray {
     x: u64,
     y: u64,
@@ -27,48 +24,52 @@ impl Ray {
     }
 }
 
-const MIN_XY: f64 = 200_000_000_000_000.;
-const MAX_XY: f64 = 400_000_000_000_000.;
-
 fn main() {
     let start_time = Instant::now();
     let input = read_input("24");
 
-    let (_, rays) = separated_list1(tag("\n"), Ray::parse)(&input).unwrap();
-    let mut num_intersections = 0;
-    for i in 0..rays.len() {
-        let ray = &rays[i];
-        for j in i + 1..rays.len() {
-            let other_ray = &rays[j];
-            let a: Array2<f64> = array![
-                [ray.xv as f64, -(other_ray.xv as f64)],
-                [ray.yv as f64, -(other_ray.yv as f64)]];
-            let b: Array1<f64> = array![(other_ray.x as i64 - ray.x as i64) as f64, (other_ray.y as i64 - ray.y as i64) as f64];
-            match a.solve(&b) {
-                Ok(x) => {
-                    let ray_t = x[[0]];
-                    let other_ray_t = x[[1]];
-                    let point_x = ray.x as f64 + (ray.xv as f64 * ray_t);
-                    let point_y = ray.y as f64 + (ray.yv as f64 * ray_t);
-                    let other_point_x = other_ray.x as f64 + (other_ray.xv as f64 * other_ray_t);
-                    let other_point_y = other_ray.y as f64 + (other_ray.yv as f64 * other_ray_t);
+    let (_, rays) = separated_list1.clone()(tag("\n"), Ray::parse)(&input).unwrap();
 
-                    if ray_t < 0. || other_ray_t < 0. {
-                        // paths intersect in the past
-                        continue;
-                    } else if point_x >= MIN_XY && point_x <= MAX_XY && point_y >= MIN_XY && point_y <= MAX_XY {
-                        assert_float_eq!(point_x, other_point_x, rmax <= 2.);
-                        assert_float_eq!(point_y, other_point_y, rmax <= 2.);
-                        num_intersections += 1;
-                    }
-                },
-                Err(_) => {
-                    // no intersection
-                    continue;
-                },
-            }
-        }
+    let mut smt_string = String::new();
+    smt_string.push_str(r#"
+(declare-const ix Int)
+(declare-const iy Int)
+(declare-const iz Int)
+(declare-const dx Int)
+(declare-const dy Int)
+(declare-const dz Int)
+(declare-const t1 Int)
+(declare-const t2 Int)
+(declare-const t3 Int)
+(declare-const t4 Int)
+(declare-const t5 Int)
+(declare-const Solution Int)
+"#);
+    for (i, ray) in rays.iter().take(5).enumerate() {
+        smt_string.push_str(&format!("(assert (>= t{} 0))\n", i + 1));
+        smt_string.push_str(&format!("(assert (= (+ (* t{} dx) ix) (+ (* {} t{}) {})))\n", i + 1, ray.xv, i + 1, ray.x));
+        smt_string.push_str(&format!("(assert (= (+ (* t{} dy) iy) (+ (* {} t{}) {})))\n", i + 1, ray.yv, i + 1, ray.y));
+        smt_string.push_str(&format!("(assert (= (+ (* t{} dz) iz) (+ (* {} t{}) {})))\n", i + 1, ray.zv, i + 1, ray.z));
+    };
+    smt_string.push_str(r#"
+(assert (= (+ (+ ix iy) iz) Solution))
+"#);
+
+    let cfg = Config::new();
+    let ctx = Context::new(&cfg);
+    let solver = Solver::new(&ctx);
+    let solution = Int::new_const(&ctx, "Solution");
+
+    solver.from_string(smt_string);
+    match solver.check() {
+        SatResult::Unsat => panic!("Unsat"),
+        SatResult::Unknown => panic!("Unknown"),
+        SatResult::Sat => {
+            let model = solver.get_model().unwrap();
+            let actual_solution = model.get_const_interp(&solution).unwrap();
+            println!("{}", actual_solution);
+            println!("Total time: {:?}", start_time.elapsed());
+            return;
+        },
     }
-    println!("{}", num_intersections);
-    println!("Total time: {:?}", start_time.elapsed());
 }
